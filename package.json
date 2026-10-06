@@ -1,0 +1,18 @@
+{
+  "name": "dewops",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scraper project scaffold.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --check src/index.js"
+  },
+  "dependencies": {
+    "playwright": "1.63.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "UNLICENSED"
+}
