@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+
 
 # Stage 1: install npm dependencies.
 FROM node:22-bookworm AS dependencies
