@@ -4,5 +4,6 @@ resource "aws_s3_bucket" "results" {
 }
 
 resource "aws_sqs_queue" "tasks" {
-  name = "dewops-scraper-tasks"
+  name                       = "dewops-scraper-tasks"
+  visibility_timeout_seconds = 300
 }

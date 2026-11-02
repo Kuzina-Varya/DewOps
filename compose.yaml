@@ -28,6 +28,22 @@ services:
         condition: service_healthy
     profiles:
       - tools
+  scraper:
+    build: .
+    image: dewops-quotes
+    command: ["node", "src/worker.js"]
+
+    environment:
+      AWS_ENDPOINT: "http://floci:4566"
+      AWS_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "test"
+      AWS_SECRET_ACCESS_KEY: "test"
+      S3_BUCKET: "dewops-scraper-results"
+      SQS_QUEUE_URL: "http://floci:4566/000000000000/dewops-scraper-tasks"
+
+    depends_on:
+      floci:
+        condition: service_healthy
 
 
 volumes:
