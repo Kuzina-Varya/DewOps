@@ -3,3 +3,21 @@ out/
 npm-debug.log*
 .env
 .DS_Store
+
+# Terraform provider cache
+.terraform/
+
+# Terraform state
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+
+# Sensitive local variables and plans
+*.tfvars
+*.tfvars.json
+*.tfplan
+.env
+.env.*
+
+# Scraper output
+out/
