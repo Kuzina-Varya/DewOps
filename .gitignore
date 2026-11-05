@@ -21,3 +21,9 @@ npm-debug.log*
 
 # Scraper output
 out/
+
+# ZIP archives
+*.[zZ][iI][pP]
+
+# Local Codex pet generation files
+.codex-pets/
