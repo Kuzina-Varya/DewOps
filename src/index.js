@@ -1,6 +1,6 @@
 import { ReceiveMessageCommand } from "@aws-sdk/client-sqs";
 import { clients } from "./aws.js";
-import { scrapeQuotes } from "./scrape.js";
+import { scrapeQuotes } from "./scraper.js";
 import { processMessage } from "./worker.js";
 
 const queueUrl = process.env.SQS_QUEUE_URL;

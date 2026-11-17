@@ -12,3 +12,9 @@ npm-debug.log*
 !*.example.tfvars
 infra/outputs.json
 crash.log
+
+.terraform.tfstate.lock.info
+*.tfvars.json
+.env.*
+*.[zZ][iI][pP]
+.codex-pets/

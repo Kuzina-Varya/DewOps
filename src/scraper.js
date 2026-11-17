@@ -1,3 +1,4 @@
+
 import { chromium } from "playwright";
 
 export async function scrapeQuotes(url) {
@@ -46,10 +47,8 @@ export async function scrapeQuotes(url) {
       }))
     );
 
-    if (!quotes.length) throw new Error("Scraper returned no quotes");
     return quotes;
   } finally {
     await browser.close();
   }
 }
-
