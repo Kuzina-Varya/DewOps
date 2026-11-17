@@ -83,9 +83,13 @@ worker не подтверждает сообщение, и по истечен�
 на `required: false` (Compose 2.24+); сам worker проверяет обязательные параметры
 при старте. Это проверяется запуском CI с чистого checkout.
 
+Первый CI также выявил неполный lock-файл: checksums архивов `zh:` позволяли
+init установить provider, но validate не мог проверить распакованный cache без
+`h1:`. Восстановлен ранее сгенерированный Terraform lock для AWS 6.71.0.
+
 Другой важный сценарий — сбой записи S3: тесты проверяют, что DeleteMessage
 не вызывается при ошибке записи или скрапера. End-to-end CI проверяет реальный
 непустой JSON в S3 и отсутствие доступных, отложенных и невидимых сообщений SQS.
 
 Документация: [Floci](https://github.com/floci-io/floci),
-[AWS provider](https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs).
+[AWS provider](https://registry.terraform.io/providers/hashicorp/aws/6.71.0/docs).
