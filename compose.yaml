@@ -1,0 +1,51 @@
+name: dewops
+
+x-aws: &aws
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  AWS_REGION: us-east-1
+  AWS_ENDPOINT_URL: http://floci:4566
+
+services:
+  floci:
+    image: floci/floci:2.2.0
+    environment:
+      FLOCI_BASE_URL: http://floci:4566
+      FLOCI_HOSTNAME: floci
+      FLOCI_STORAGE_MODE: persistent
+      FLOCI_STORAGE_PERSISTENT_PATH: /app/data
+    volumes:
+      - floci-data:/app/data
+    ports:
+      - "127.0.0.1:4566:4566"
+  terraform:
+    image: hashicorp/terraform:1.9.8
+    working_dir: /infra
+    volumes:
+      - ./infra:/infra
+    environment:
+      <<: *aws
+    profiles: [tools]
+  scraper:
+    image: dewops-quotes:lab2
+    build: .
+    init: true
+    env_file:
+      - path: ./out/resources.env
+        required: false
+    environment:
+      <<: *aws
+    restart: unless-stopped
+    profiles: [app]
+  tools:
+    image: dewops-quotes:lab2
+    environment:
+      <<: *aws
+    volumes:
+      - ./out:/app/out
+      - ./infra:/infra:ro
+    entrypoint: [node, src/control.js]
+    profiles: [tools]
+
+volumes:
+  floci-data:

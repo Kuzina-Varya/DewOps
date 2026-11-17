@@ -6,9 +6,11 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.js",
-    "test": "node --check src/index.js"
+    "test": "node --test"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1170.0",
+    "@aws-sdk/client-sqs": "3.1170.0",
     "playwright": "1.63.0"
   },
   "engines": {

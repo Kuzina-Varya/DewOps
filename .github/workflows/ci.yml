@@ -1,16 +1,26 @@
 name: CI
-
 on:
   push:
   pull_request:
-
 jobs:
-  test:
+  lab2:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Run CI
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: make install
+      - run: make test
+      - name: Format, validate, provision, plan and end-to-end SQS/S3
         run: make ci
+      - name: Verify repeated provisioning makes no changes
+        run: make provision check-plan
+      - name: Logs
+        if: always()
+        run: make logs
+      - name: Verify destroy is repeatable
+        if: always()
+        run: make destroy && make destroy

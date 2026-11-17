@@ -1,66 +1,29 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { chromium } from "playwright";
+import { ReceiveMessageCommand } from "@aws-sdk/client-sqs";
+import { clients } from "./aws.js";
+import { scrapeQuotes } from "./scraper.js";
+import { processMessage } from "./worker.js";
 
-const url = "https://quotes.toscrape.com/scroll";
-const outputDirectory = "out";
-const outputFile = `${outputDirectory}/result.json`;
-
-async function scrapeQuotes() {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ["--no-sandbox"]
-  });
-
+const queueUrl = process.env.SQS_QUEUE_URL;
+const bucket = process.env.S3_BUCKET;
+if (!queueUrl || !bucket) throw new Error("SQS_QUEUE_URL and S3_BUCKET are required");
+const { s3, sqs } = clients();
+let stopping = false;
+process.on("SIGTERM", () => { stopping = true; });
+process.on("SIGINT", () => { stopping = true; });
+while (!stopping) {
   try {
-    const page = await browser.newPage();
-
-    await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 30_000
-    });
-
-    await page.waitForSelector(".quote");
-
-    let previousCount = 0;
-    let unchangedRounds = 0;
-
-    while (unchangedRounds < 3) {
-      const currentCount = await page.locator(".quote").count();
-
-      if (currentCount === previousCount) {
-        unchangedRounds += 1;
-      } else {
-        unchangedRounds = 0;
-        previousCount = currentCount;
+    const { Messages = [] } = await sqs.send(new ReceiveMessageCommand({
+      QueueUrl: queueUrl, MaxNumberOfMessages: 1, WaitTimeSeconds: 10, VisibilityTimeout: 180
+    }));
+    for (const message of Messages) {
+      try {
+        await processMessage({ message, queueUrl, bucket, s3, sqs, scrape: scrapeQuotes });
+      } catch (error) {
+        console.error("Job failed; message retained for retry:", error);
       }
-
-      await page.evaluate(() => {
-        window.scrollTo(0, document.body.scrollHeight);
-      });
-
-      await page.waitForTimeout(1_000);
     }
-
-    const quotes = await page.locator(".quote").evaluateAll((elements) =>
-      elements.map((element) => ({
-        text: element.querySelector(".text")?.textContent?.trim() ?? "",
-        author: element.querySelector(".author")?.textContent?.trim() ?? "",
-        tags: Array.from(element.querySelectorAll(".tag"), (tag) =>
-          tag.textContent?.trim() ?? ""
-        )
-      }))
-    );
-
-    await mkdir(outputDirectory, { recursive: true });
-    await writeFile(outputFile, `${JSON.stringify(quotes, null, 2)}\n`);
-
-    console.log(`Saved ${quotes.length} quotes to ${outputFile}`);
-  } finally {
-    await browser.close();
+  } catch (error) {
+    console.error("Receive failed:", error);
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 }
-
-scrapeQuotes().catch((error) => {
-  console.error("Scraping failed:", error);
-  process.exitCode = 1;
-});
