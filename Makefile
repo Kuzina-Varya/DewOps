@@ -1,7 +1,10 @@
 COMPOSE := docker compose
 TF ?= $(COMPOSE) run --rm terraform
 
-.PHONY: build provision deploy run clean destroy ci fmt validate lock test logs check-plan
+.PHONY: install build provision deploy run clean destroy ci fmt validate lock test logs check-plan
+
+install:
+	npm ci
 
 build:
 	$(COMPOSE) build scraper

@@ -12,7 +12,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: make install
       - run: make test
       - name: Format, validate, provision, plan and end-to-end SQS/S3
         run: make ci

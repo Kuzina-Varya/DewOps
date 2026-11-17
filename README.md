@@ -34,6 +34,7 @@ Endpoint, регион, тестовые AWS credentials передаются ч
 ## Остальные команды
 
 ```sh
+make install     # установить npm-зависимости по lock-файлу (Node.js 22+)
 make build       # собрать Docker-образ
 make test        # Node.js-тесты (на хосте нужны Node.js 22+ и установленные зависимости)
 make fmt         # исправить форматирование Terraform
