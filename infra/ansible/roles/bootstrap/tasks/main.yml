@@ -1,0 +1,46 @@
+---
+- name: Ensure the permanent administrator exists outside the docker group
+  ansible.builtin.user:
+    name: admin
+    shell: /bin/bash
+    groups: sudo
+    append: false
+    password_lock: true
+    create_home: true
+
+- name: Install the permanent public key
+  ansible.posix.authorized_key:
+    user: admin
+    key: "{{ bootstrap_admin_public_key }}"
+    exclusive: true
+
+- name: Grant validated sudo access to admin
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/90-quotes-admin
+    content: "admin ALL=(ALL) NOPASSWD: ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Select the permanent account for all further connections
+  ansible.builtin.set_fact:
+    ansible_user: admin
+
+- name: Discard the bootstrap SSH connection
+  ansible.builtin.meta: reset_connection
+
+- name: Wait for an actual new authenticated SSH connection
+  ansible.builtin.wait_for_connection:
+    timeout: 60
+
+- name: Verify the remote identity without sudo
+  ansible.builtin.command: id -un
+  become: false
+  register: bootstrap_identity
+  changed_when: false
+
+- name: Refuse hardening unless the new admin session works
+  ansible.builtin.assert:
+    that:
+      - bootstrap_identity.stdout == 'admin'

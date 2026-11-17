@@ -1,0 +1,32 @@
+---
+- name: Wait for valid disk JSON, identical Nginx JSON, no temporary file and an empty PEL
+  ansible.builtin.command:
+    argv: >-
+      {{ scraper_compose_command + ['run', '--rm', '--no-deps', 'scraper',
+      'node', 'src/jobctl.js', 'verify', scraper_job_id] }}
+  register: scraper_verified
+  changed_when: false
+  retries: 60
+  delay: 2
+  until: scraper_verified.rc == 0
+
+- name: Fetch the concrete result through the VM published HTTP port
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}/results/{{ scraper_job_id }}.json"
+    use_proxy: false
+    timeout: 5
+    return_content: true
+  delegate_to: localhost
+  become: false
+  register: scraper_http_result
+
+- name: Check HTTP content and content type
+  ansible.builtin.assert:
+    that:
+      - scraper_http_result.status == 200
+      - scraper_http_result.json | length > 0
+      - "'application/json' in scraper_http_result.content_type"
+
+- name: Show the verified result fingerprint
+  ansible.builtin.debug:
+    msg: "{{ scraper_verified.stdout | from_json }}"

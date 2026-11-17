@@ -1,0 +1,11 @@
+---
+extends: default
+ignore: |
+  .lab/
+  node_modules/
+  infra/ansible/inventories/lab/
+rules:
+  line-length:
+    max: 150
+  truthy:
+    check-keys: false

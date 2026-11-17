@@ -1,0 +1,5 @@
+---
+profile: moderate
+exclude_paths:
+  - .lab/
+  - node_modules/

@@ -1,0 +1,3 @@
+---
+scraper_root: /srv/quotes-scraper
+scraper_source_dir: "{{ playbook_dir }}/../../.."

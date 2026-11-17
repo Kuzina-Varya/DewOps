@@ -1,0 +1,13 @@
+---
+all:
+  children:
+    scraper_hosts:
+      hosts:
+        quotes:
+          ansible_host: 192.0.2.10
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: /tmp/lab-example/id_ed25519
+          ansible_ssh_common_args: >-
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/tmp/lab-example/known_hosts
+            -o HostKeyAlias=quotes-lab-example -o IdentitiesOnly=yes
+          bootstrap_admin_public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeExampleNotARealKeyForSyntaxChecksOnly lab-example

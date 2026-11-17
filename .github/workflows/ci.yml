@@ -1,26 +1,44 @@
+---
 name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  lab2:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: make install
-      - run: make test
-      - name: Format, validate, provision, plan and end-to-end SQS/S3
+      - name: Collections, YAML, lint, example inventory syntax, Compose and unit tests
         run: make ci
-      - name: Verify repeated provisioning makes no changes
-        run: make provision check-plan
-      - name: Logs
+  vm:
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare a Multipass-capable control host
+        run: make ci-vm-host
+      - name: Real Ubuntu VM, SSH transition, idempotence, HTTP and crash recovery
+        run: make ci-vm
+      - name: Prove a deleted environment can be recreated
+        run: make recreate-test
+      - name: Preserve Ansible evidence without private keys
         if: always()
-        run: make logs
-      - name: Verify destroy is repeatable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ansible-evidence
+          path: .lab/logs/
+      - name: Destroy twice
         if: always()
         run: make destroy && make destroy

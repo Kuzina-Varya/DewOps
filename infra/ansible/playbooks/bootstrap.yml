@@ -1,0 +1,7 @@
+---
+- name: Create the permanent administrator and prove a fresh SSH login
+  hosts: scraper_hosts
+  become: true
+  gather_facts: false
+  roles:
+    - bootstrap

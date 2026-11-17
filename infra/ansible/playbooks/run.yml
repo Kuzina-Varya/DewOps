@@ -1,0 +1,26 @@
+---
+- name: Submit exactly one identified job
+  hosts: scraper_hosts
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: admin
+  vars_files: [../vars/main.yml]
+  tasks:
+    - name: Validate the job supplied by the control node
+      ansible.builtin.assert:
+        that:
+          - scraper_job_id is match('^[a-zA-Z0-9_-]{1,80}$')
+          - scraper_job_url is match('^https?://')
+
+    - name: Add one job to the Redis stream
+      ansible.builtin.command:
+        argv: >-
+          {{ scraper_compose_command + ['run', '--rm', '--no-deps', 'scraper',
+          'node', 'src/jobctl.js', 'submit', scraper_job_id, scraper_job_url] }}
+      changed_when: true
+      register: scraper_submitted
+
+    - name: Report the submitted job and stream identifiers
+      ansible.builtin.debug:
+        msg: "{{ scraper_submitted.stdout | from_json }}"
