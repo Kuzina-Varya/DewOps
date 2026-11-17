@@ -3,3 +3,12 @@ out/
 npm-debug.log*
 .env
 .DS_Store
+
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.example.tfvars
+infra/outputs.json
+crash.log
