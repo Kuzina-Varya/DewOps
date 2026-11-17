@@ -1,59 +1,79 @@
-COMPOSE := docker compose
-TF ?= $(COMPOSE) run --rm terraform
+SHELL := /bin/sh
+.DEFAULT_GOAL := setup
+PYTHON ?= python3
+VM_NAME ?= quotes-lab3
+URL ?= https://quotes.toscrape.com/scroll
+export VM_NAME URL
+export ANSIBLE_CONFIG := $(CURDIR)/infra/ansible/ansible.cfg
+export ANSIBLE_COLLECTIONS_PATH := $(CURDIR)/.lab/collections
+export ANSIBLE_HOST_KEY_CHECKING := True
+VENV := .lab/venv/bin
+EXAMPLE := infra/ansible/inventories/hosts.example.yml
 
-.PHONY: install build provision deploy run clean destroy ci fmt validate lock test logs check-plan
+.PHONY: setup provision deploy run verify fault-test destroy ci install test lint syntax compose-check idempotence ci-vm-host ci-vm recreate-test
+
+setup:
+	$(PYTHON) tools/lab.py setup
+
+provision: setup
+	$(PYTHON) tools/lab.py provision
+
+deploy: setup
+	$(PYTHON) tools/lab.py deploy
+
+run:
+	$(PYTHON) tools/lab.py run
+
+verify:
+	$(PYTHON) tools/lab.py verify
+
+fault-test:
+	$(PYTHON) tools/lab.py fault-test
+
+destroy:
+	$(PYTHON) tools/lab.py destroy
 
 install:
 	npm ci
 
-build:
-	$(COMPOSE) build scraper
-
-provision: build
-	$(COMPOSE) up -d floci
-	$(COMPOSE) run --rm tools wait
-	$(TF) init -input=false -lockfile=readonly
-	$(TF) apply -input=false -auto-approve
-	$(COMPOSE) run --rm --entrypoint sh terraform -c 'terraform output -json > /infra/outputs.json'
-	$(COMPOSE) run --rm tools configure
-
-deploy: provision
-	$(COMPOSE) up -d --build scraper
-
-run:
-	$(COMPOSE) run --rm tools run
-
-destroy: build
-	$(COMPOSE) stop scraper
-	$(COMPOSE) up -d floci
-	$(COMPOSE) run --rm tools wait
-	$(TF) init -input=false -lockfile=readonly
-	$(TF) destroy -input=false -auto-approve
-	$(COMPOSE) down --volumes --remove-orphans
-
-clean: destroy
-	$(COMPOSE) run --rm --no-deps tools clean
-	$(COMPOSE) down --volumes --remove-orphans
-
-fmt:
-	$(TF) fmt -recursive
-
-lock:
-	$(TF) init -input=false
-	$(TF) providers lock -platform=linux_amd64 -platform=windows_amd64 -platform=darwin_arm64
-
-validate:
-	$(TF) fmt -check -recursive
-	$(TF) init -backend=false -input=false -lockfile=readonly
-	$(TF) validate
-
 test:
 	npm test
 
-check-plan:
-	$(TF) plan -input=false -detailed-exitcode
+lint: setup
+	$(VENV)/yamllint .
+	$(VENV)/ansible-lint
 
-logs:
-	$(COMPOSE) logs scraper floci
+syntax: setup
+	@for playbook in bootstrap site deploy run verify fault-test; do \
+		$(VENV)/ansible-playbook -i $(EXAMPLE) --syntax-check infra/ansible/playbooks/$$playbook.yml || exit $$?; \
+	done
+	$(PYTHON) -m py_compile tools/lab.py
 
-ci: validate deploy check-plan run
+compose-check:
+	docker compose -f deploy/compose.yaml config --quiet
+
+ci: lint syntax compose-check install test
+
+idempotence: setup
+	$(PYTHON) tools/lab.py idempotence
+
+# GitHub-hosted Ubuntu runner preparation, never configuration of the target VM.
+ci-vm-host:
+	test -c /dev/kvm
+	sudo snap install multipass
+	@for attempt in $$(seq 1 60); do \
+		if sudo /snap/bin/multipass list --format json; then exit 0; fi; \
+		sleep 2; \
+	done; \
+	sudo journalctl -u snap.multipass.multipassd --no-pager -n 100; exit 1
+
+ci-vm:
+	$(MAKE) provision
+	$(MAKE) idempotence
+	$(MAKE) run verify
+	$(MAKE) fault-test
+
+recreate-test:
+	$(MAKE) destroy
+	$(MAKE) provision
+	$(MAKE) run verify

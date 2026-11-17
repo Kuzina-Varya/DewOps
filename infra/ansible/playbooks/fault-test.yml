@@ -1,0 +1,135 @@
+---
+- name: Prove recovery from a crash before acknowledgement and immutable redelivery
+  hosts: scraper_hosts
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: admin
+  vars_files: [../vars/main.yml]
+  tasks:
+    - name: Run the controlled crash scenario with unconditional recovery
+      block:
+        - name: Require an empty pending list before the experiment
+          ansible.builtin.command:
+            argv: "{{ scraper_compose_command + ['run', '--rm', '--no-deps', 'scraper', 'node', 'src/jobctl.js', 'pending'] }}"
+          register: scraper_initial_pending
+          changed_when: false
+
+        - name: Refuse to interfere with another unfinished experiment
+          ansible.builtin.assert:
+            that:
+              - (scraper_initial_pending.stdout | from_json).count == 0
+              - (scraper_initial_pending.stdout | from_json).lag == 0
+
+        - name: Arm a gate after atomic write but before XACK
+          ansible.builtin.copy:
+            dest: "{{ scraper_root }}/control/fault-{{ scraper_job_id }}.armed"
+            content: "pause-before-ack\n"
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Submit the fault-test job
+          ansible.builtin.command:
+            argv: >-
+              {{ scraper_compose_command + ['run', '--rm', '--no-deps', 'scraper',
+              'node', 'src/jobctl.js', 'submit', scraper_job_id, scraper_job_url] }}
+          register: scraper_fault_submitted
+          changed_when: true
+
+        - name: Wait until the real worker reaches the pre-acknowledgement gate
+          ansible.builtin.stat:
+            path: "{{ scraper_root }}/control/fault-{{ scraper_job_id }}.ready"
+          register: scraper_fault_ready
+          until: scraper_fault_ready.stat.exists
+          retries: 100
+          delay: 1
+
+        - name: Record the original result bytes and inode
+          ansible.builtin.command:
+            argv: >-
+              {{ scraper_compose_command + ['run', '--rm', '--no-deps', 'scraper',
+              'node', 'src/jobctl.js', 'fingerprint', scraper_job_id] }}
+          register: scraper_original
+          changed_when: false
+
+        - name: Kill the worker without allowing application cleanup or XACK
+          ansible.builtin.command:
+            argv: "{{ scraper_compose_command + ['kill', '--signal', 'SIGKILL', 'scraper'] }}"
+          changed_when: true
+
+        - name: Read the killed container state
+          ansible.builtin.command:
+            argv: [docker, inspect, quotes-scraper-scraper-1]
+          register: scraper_killed
+          changed_when: false
+
+        - name: Prove that the worker has actually stopped
+          ansible.builtin.assert:
+            that:
+              - not (scraper_killed.stdout | from_json)[0].State.Running
+
+        - name: Read the PEL while the worker is dead
+          ansible.builtin.command:
+            argv: "{{ scraper_compose_command + ['run', '--rm', '--no-deps', 'scraper', 'node', 'src/jobctl.js', 'pending'] }}"
+          register: scraper_crash_pending
+          changed_when: false
+
+        - name: Prove that this exact message remains pending after the crash
+          ansible.builtin.assert:
+            that:
+              - (scraper_crash_pending.stdout | from_json).count == 1
+              - >-
+                (scraper_crash_pending.stdout | from_json).entries[0][0] ==
+                (scraper_fault_submitted.stdout | from_json).stream_id
+
+        - name: Release the test gate
+          ansible.builtin.file:
+            path: "{{ scraper_root }}/control/fault-{{ scraper_job_id }}.armed"
+            state: absent
+
+        - name: Start a fresh consumer to reclaim the old pending entry
+          community.docker.docker_compose_v2:
+            project_src: "{{ scraper_root }}"
+            state: present
+            build: never
+            wait: true
+
+        - name: Verify recovery through XAUTOCLAIM
+          ansible.builtin.include_tasks: tasks/verify-result.yml
+
+        - name: Check that recovery preserved the first completed file
+          ansible.builtin.assert:
+            that:
+              - (scraper_original.stdout | from_json).sha256 == (scraper_verified.stdout | from_json).sha256
+              - (scraper_original.stdout | from_json).inode == (scraper_verified.stdout | from_json).inode
+
+        - name: Deliver the same job identifier again as a new stream entry
+          ansible.builtin.command:
+            argv: >-
+              {{ scraper_compose_command + ['run', '--rm', '--no-deps', 'scraper',
+              'node', 'src/jobctl.js', 'submit', scraper_job_id, scraper_job_url] }}
+          changed_when: true
+
+        - name: Verify acknowledgement of the duplicate
+          ansible.builtin.include_tasks: tasks/verify-result.yml
+
+        - name: Prove redelivery neither replaced nor damaged the original result
+          ansible.builtin.assert:
+            that:
+              - (scraper_original.stdout | from_json).sha256 == (scraper_verified.stdout | from_json).sha256
+              - (scraper_original.stdout | from_json).inode == (scraper_verified.stdout | from_json).inode
+
+      always:
+        - name: Remove both test markers even after failure
+          ansible.builtin.file:
+            path: "{{ scraper_root }}/control/fault-{{ scraper_job_id }}.{{ item }}"
+            state: absent
+          loop: [armed, ready]
+
+        - name: Leave the worker running even after a failed experiment
+          community.docker.docker_compose_v2:
+            project_src: "{{ scraper_root }}"
+            state: present
+            build: never
+            wait: true

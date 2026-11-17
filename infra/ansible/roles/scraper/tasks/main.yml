@@ -1,0 +1,71 @@
+---
+- name: Create the deployment and source directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ scraper_root }}"
+    - "{{ scraper_root }}/app"
+
+- name: Create writable worker storage with read access for Nginx
+  ansible.builtin.file:
+    path: "{{ scraper_root }}/{{ item }}"
+    state: directory
+    owner: "10001"
+    group: "10001"
+    mode: "0755"
+  loop: [results, control]
+
+- name: Copy the scraper source tree
+  ansible.builtin.copy:
+    src: "{{ scraper_source_dir }}/src/"
+    dest: "{{ scraper_root }}/app/src/"
+    owner: root
+    group: root
+    mode: "0644"
+    directory_mode: "0755"
+  notify: Build and apply scraper stack
+
+- name: Copy build inputs
+  ansible.builtin.copy:
+    src: "{{ scraper_source_dir }}/{{ item }}"
+    dest: "{{ scraper_root }}/app/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [Dockerfile, package.json, package-lock.json, .dockerignore]
+  notify: Build and apply scraper stack
+
+- name: Copy service configuration
+  ansible.builtin.copy:
+    src: "{{ scraper_source_dir }}/deploy/{{ item }}"
+    dest: "{{ scraper_root }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: [compose.yaml, redis.conf, nginx.conf]
+  notify: Build and apply scraper stack
+
+- name: Build and apply only when deployment inputs change
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure the unchanged stack remains running without rebuilding
+  community.docker.docker_compose_v2:
+    project_src: "{{ scraper_root }}"
+    state: present
+    build: never
+    pull: missing
+    wait: true
+    wait_timeout: 120
+
+- name: Wait for the published HTTP endpoint
+  ansible.builtin.uri:
+    url: http://127.0.0.1/health
+    use_proxy: false
+  register: scraper_health
+  retries: 30
+  delay: 2
+  until: scraper_health.status == 200

@@ -1,0 +1,3 @@
+---
+scraper_root: /srv/quotes-scraper
+scraper_compose_command: [docker, compose, --project-directory, /srv/quotes-scraper]

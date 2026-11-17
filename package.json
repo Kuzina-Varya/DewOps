@@ -9,9 +9,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "3.1170.0",
-    "@aws-sdk/client-sqs": "3.1170.0",
-    "playwright": "1.63.0"
+    "playwright": "1.63.0",
+    "redis": "5.9.0"
   },
   "engines": {
     "node": ">=22"

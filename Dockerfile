@@ -14,6 +14,7 @@ RUN --mount=type=cache,target=/root/.npm \
 FROM node:22-bookworm AS browser
 
 ARG PLAYWRIGHT_VERSION=1.63.0
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 
 RUN --mount=type=cache,target=/root/.npm \
     npx --yes playwright@${PLAYWRIGHT_VERSION} \

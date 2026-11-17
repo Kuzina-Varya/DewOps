@@ -1,0 +1,11 @@
+---
+- name: Build and apply scraper stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ scraper_root }}"
+    state: present
+    build: always
+    pull: missing
+    wait: true
+    wait_timeout: 120
+  environment:
+    DOCKER_BUILDKIT: "1"

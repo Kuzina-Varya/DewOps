@@ -1,0 +1,70 @@
+---
+- name: Require the supported Ubuntu release
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version == '24.04'
+
+- name: Remove packages that conflict with the official Docker distribution
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose
+      - docker-compose-v2
+      - docker-doc
+      - podman-docker
+      - containerd
+      - runc
+    state: absent
+
+- name: Install repository prerequisites
+  ansible.builtin.apt:
+    name: [ca-certificates, python3-apt, python3-requests]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create the APT keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Docker official signing key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+
+- name: Discover the native Debian architecture
+  ansible.builtin.command: dpkg --print-architecture
+  register: docker_engine_architecture
+  changed_when: false
+
+- name: Configure the official Docker APT repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ docker_engine_architecture.stdout }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu {{ ansible_facts.distribution_release }} stable
+    filename: docker
+    state: present
+
+- name: Install Docker Engine and its official CLI plugins
+  ansible.builtin.apt:
+    name: [docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin, docker-compose-plugin]
+    state: present
+  notify: Restart Docker
+
+- name: Enable and start the Docker daemon
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Apply daemon changes before deploying containers
+  ansible.builtin.meta: flush_handlers
