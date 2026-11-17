@@ -1,4 +1,4 @@
-#cloud-config  # yamllint disable-line rule:comments
+# tools/lab.py prepends the required cloud-config content-type header.
 ---
 # Bootstrap only. Multipass manages the default temporary ubuntu account.
 users:

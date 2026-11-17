@@ -95,7 +95,7 @@ def provision():
         raise RuntimeError("VM already exists without this lab's ownership marker; choose another VM_NAME")
     if not instance:
         public_key = key_material()
-        config = (ROOT / "infra/cloud-init.yaml").read_text().replace("__LAB_PUBLIC_KEY__", public_key)
+        config = "#cloud-config\n" + (ROOT / "infra/cloud-init.yaml").read_text().replace("__LAB_PUBLIC_KEY__", public_key)
         marker.write_text(json.dumps({"name": VM}))
         (LAB / "cloud-init.yaml").write_text(config)
         execute([mp(), "launch", "24.04", "--name", VM, "--cpus", "2", "--memory", "4G", "--disk", "20G",
