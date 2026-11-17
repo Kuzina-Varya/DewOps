@@ -1,4 +1,4 @@
-#cloud-config
+#cloud-config  # yamllint disable-line rule:comments
 ---
 # Bootstrap only. Multipass manages the default temporary ubuntu account.
 users:

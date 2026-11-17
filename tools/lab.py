@@ -26,9 +26,9 @@ def execute(args, **kwargs):
 
 def mp():
     binary = os.environ.get("MULTIPASS") or shutil.which("multipass") or shutil.which("multipass.exe")
-    fallback = Path("/mnt/c/Program Files/Multipass/bin/multipass.exe")
-    if not binary and fallback.is_file():
-        binary = str(fallback)
+    for fallback in (Path("/snap/bin/multipass"), Path("/mnt/c/Program Files/Multipass/bin/multipass.exe")):
+        if not binary and fallback.is_file():
+            binary = str(fallback)
     if not binary:
         raise RuntimeError("Install Multipass on the host; on WSL set MULTIPASS to multipass.exe if needed")
     return binary
