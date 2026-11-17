@@ -26,6 +26,8 @@ jobs:
     needs: checks
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      MULTIPASS_SUDO: '1'
     steps:
       - uses: actions/checkout@v4
       - name: Prepare a Multipass-capable control host

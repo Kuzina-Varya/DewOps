@@ -62,7 +62,7 @@ ci-vm-host:
 	test -c /dev/kvm
 	sudo snap install multipass
 	@for attempt in $$(seq 1 60); do \
-		if /snap/bin/multipass version; then exit 0; fi; \
+		if sudo /snap/bin/multipass list --format json; then exit 0; fi; \
 		sleep 2; \
 	done; \
 	sudo journalctl -u snap.multipass.multipassd --no-pager -n 100; exit 1

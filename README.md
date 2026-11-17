@@ -40,6 +40,11 @@ SSH `22` — системный сервис VM для Ansible, не конте�
   Debian architecture определяется через `dpkg --print-architecture`, образы
   Redis/Nginx/Node используются без `platform:`.
 
+На Ubuntu control host, если Multipass daemon требует прав sudo, передайте
+`MULTIPASS_SUDO=1` всем Make-командам; так работает VM job в CI. Это повышает
+права только клиента Multipass на control host, Ansible подключается к VM по
+собственному SSH-ключу и выполняет дальнейшую настройку под `admin`.
+
 В WSL скрипт автоматически ищет `multipass.exe`, включая стандартный путь
 `/mnt/c/Program Files/Multipass/bin/multipass.exe`. При другой установке передайте
 путь переменной `MULTIPASS`. Cloud-init передаётся в stdin `multipass.exe`, поэтому

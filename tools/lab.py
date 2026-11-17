@@ -31,11 +31,11 @@ def mp():
             binary = str(fallback)
     if not binary:
         raise RuntimeError("Install Multipass on the host; on WSL set MULTIPASS to multipass.exe if needed")
-    return binary
+    return ["sudo", binary] if os.environ.get("MULTIPASS_SUDO") == "1" else [binary]
 
 
 def instances():
-    return json.loads(execute([mp(), "list", "--format", "json"], capture_output=True, timeout=60).stdout)["list"]
+    return json.loads(execute([*mp(), "list", "--format", "json"], capture_output=True, timeout=60).stdout)["list"]
 
 
 def current_instance():
@@ -98,11 +98,11 @@ def provision():
         config = "#cloud-config\n" + (ROOT / "infra/cloud-init.yaml").read_text().replace("__LAB_PUBLIC_KEY__", public_key)
         marker.write_text(json.dumps({"name": VM}))
         (LAB / "cloud-init.yaml").write_text(config)
-        execute([mp(), "launch", "24.04", "--name", VM, "--cpus", "2", "--memory", "4G", "--disk", "20G",
+        execute([*mp(), "launch", "24.04", "--name", VM, "--cpus", "2", "--memory", "4G", "--disk", "20G",
                  "--timeout", "900", "--cloud-init", "-"], input=config, timeout=1000)
         # Bootstrap read-only operations over Multipass's authenticated daemon channel.
-        execute([mp(), "exec", VM, "--", "sudo", "cloud-init", "status", "--wait"], timeout=300)
-        host_key = execute([mp(), "exec", VM, "--", "sudo", "cat", "/etc/ssh/ssh_host_ed25519_key.pub"],
+        execute([*mp(), "exec", VM, "--", "sudo", "cloud-init", "status", "--wait"], timeout=300)
+        host_key = execute([*mp(), "exec", VM, "--", "sudo", "cat", "/etc/ssh/ssh_host_ed25519_key.pub"],
                            capture_output=True, timeout=60).stdout.strip()
         if not host_key.startswith("ssh-ed25519 "):
             raise RuntimeError("Multipass did not return an Ed25519 SSH host public key")
@@ -110,7 +110,7 @@ def provision():
         KNOWN.chmod(0o600)
         instance = current_instance()
     elif instance["state"] == "Stopped":
-        execute([mp(), "start", VM], timeout=300)
+        execute([*mp(), "start", VM], timeout=300)
         instance = current_instance()
     if not KNOWN.exists() or not KEY.exists():
         raise RuntimeError("Pinned SSH identity is missing; destroy and recreate this lab, do not disable host checking")
@@ -170,7 +170,7 @@ def destroy():
         if json.loads(marker.read_text())["name"] != VM:
             raise RuntimeError("VM_NAME does not match the VM owned by this .lab directory")
         if current_instance():
-            execute([mp(), "delete", "--purge", VM], timeout=300)
+            execute([*mp(), "delete", "--purge", VM], timeout=300)
     # Only exact, repository-owned generated directories, never global Multipass purge.
     for directory in (LAB, INVENTORY.parent):
         if directory.exists():
@@ -204,5 +204,7 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except subprocess.CalledProcessError as error:
+        sys.exit(f"{error}\n{error.stderr or error.stdout or ''}")
     except (RuntimeError, OSError, subprocess.SubprocessError) as error:
         sys.exit(str(error))
