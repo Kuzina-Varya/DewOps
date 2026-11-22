@@ -50,6 +50,24 @@ SSH `22` — системный сервис VM для Ansible, не конте�
 путь переменной `MULTIPASS`. Cloud-init передаётся в stdin `multipass.exe`, поэтому
 Windows-сервису не требуется читать Linux-путь или UNC-путь из WSL.
 
+Если VPN пропускает соединение Windows → VM, но блокирует WSL → VM, включите
+транспорт через Windows, сохраняя VPN подключённым:
+
+```sh
+export WSL_WINDOWS_RELAY=1
+make provision
+make run verify
+make fault-test
+```
+
+`make setup` автоматически компилирует небольшой TCP relay из
+`tools/windows-tcp-relay.cs` штатным компилятором .NET Framework на Windows.
+Бинарник находится только в `.lab/`. Relay передаёт байты SSH через сетевой стек
+Windows; Ansible, SSH-ключи и проверка закреплённого host key остаются в WSL.
+Проверка HTTP использует временный локальный SSH-туннель к опубликованному порту
+Nginx на VM; туннель закрывается после проверки. Redis наружу не открывается.
+Переменная должна быть задана для всех команд работы с этим окружением.
+
 ## Запуск: только Makefile
 
 ```sh

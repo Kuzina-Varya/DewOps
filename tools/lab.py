@@ -7,8 +7,10 @@ from pathlib import Path
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
+import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +52,23 @@ def setup():
     execute([LAB / "venv/bin/pip", "install", "--disable-pip-version-check", "-r", ROOT / "tools/requirements-control.txt"])
     execute([LAB / "venv/bin/ansible-galaxy", "collection", "install", "-r",
              ROOT / "infra/ansible/requirements.yml", "-p", LAB / "collections"], env=ansible_env())
+    if os.environ.get("WSL_WINDOWS_RELAY") == "1":
+        windows_relay()
+
+
+def windows_relay():
+    """Compile an AnyCPU Windows TCP transport; never change the target VM."""
+    compiler = Path("/mnt/c/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe")
+    if not compiler.is_file():
+        raise RuntimeError("WSL_WINDOWS_RELAY requires Windows .NET Framework C# compiler")
+    source = ROOT / "tools/windows-tcp-relay.cs"
+    binary = LAB / "windows-tcp-relay.exe"
+    if not binary.exists() or binary.stat().st_mtime < source.stat().st_mtime:
+        winpath = lambda path: execute(["wslpath", "-w", path], capture_output=True).stdout.strip()
+        execute([compiler, "/nologo", "/target:exe", "/platform:anycpu",
+                 f"/out:{winpath(binary)}", winpath(source)])
+    binary.chmod(0o700)
+    return str(binary)
 
 
 def ansible_env():
@@ -72,6 +91,8 @@ def refresh_inventory(instance):
     address = addresses[0]
     options = ["-o", "StrictHostKeyChecking=yes", "-o", f"UserKnownHostsFile={KNOWN}",
                "-o", f"HostKeyAlias={ALIAS}", "-o", "IdentitiesOnly=yes"]
+    if os.environ.get("WSL_WINDOWS_RELAY") == "1":
+        options += ["-o", f"ProxyCommand={shlex.quote(windows_relay())} %h %p"]
     probe = subprocess.run(["ssh", "-F", "/dev/null", "-i", str(KEY), *options,
                             "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", f"admin@{address}", "true"],
                            capture_output=True, text=True, timeout=15)
@@ -125,14 +146,41 @@ def play(name, extra=None):
             ROOT / f"infra/ansible/playbooks/{name}.yml"]
     if extra:
         args += ["--extra-vars", json.dumps(extra)]
+    tunnel = None
+    if os.environ.get("WSL_WINDOWS_RELAY") == "1" and name in ("verify", "fault-test"):
+        host = json.loads(INVENTORY.read_text())["all"]["children"]["scraper_hosts"]["hosts"]["quotes"]
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+        options = shlex.split(host["ansible_ssh_common_args"])
+        tunnel = subprocess.Popen(["ssh", "-N", "-i", str(KEY), *options,
+                                   "-o", "ExitOnForwardFailure=yes", "-o", "BatchMode=yes",
+                                   "-L", f"127.0.0.1:{port}:127.0.0.1:80", f"admin@{host['ansible_host']}"])
+        deadline = time.monotonic() + 15
+        while True:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=1):
+                    break
+            except OSError:
+                if tunnel.poll() is not None or time.monotonic() >= deadline:
+                    tunnel.terminate()
+                    tunnel.wait(timeout=10)
+                    raise RuntimeError("SSH HTTP tunnel could not be established") from None
+                time.sleep(0.1)
+        args += ["--extra-vars", json.dumps({"scraper_http_base_url": f"http://127.0.0.1:{port}"})]
     log_path = LAB / f"logs/{name}.log"
-    with log_path.open("w") as log:
-        process = subprocess.Popen([str(arg) for arg in args], env=ansible_env(), text=True,
-                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=ROOT)
-        for line in process.stdout:
-            print(line, end="", flush=True)
-            log.write(line)
-        code = process.wait()
+    try:
+        with log_path.open("w") as log:
+            process = subprocess.Popen([str(arg) for arg in args], env=ansible_env(), text=True,
+                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=ROOT)
+            for line in process.stdout:
+                print(line, end="", flush=True)
+                log.write(line)
+            code = process.wait()
+    finally:
+        if tunnel:
+            tunnel.terminate()
+            tunnel.wait(timeout=10)
     if code:
         raise RuntimeError(f"Ansible {name} failed ({code}); see {log_path}")
     if name == "site":

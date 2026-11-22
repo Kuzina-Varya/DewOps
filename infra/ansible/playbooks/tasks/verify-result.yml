@@ -12,7 +12,7 @@
 
 - name: Fetch the concrete result through the VM published HTTP port
   ansible.builtin.uri:
-    url: "http://{{ ansible_host }}/results/{{ scraper_job_id }}.json"
+    url: "{{ scraper_http_base_url | default('http://' ~ ansible_host) }}/results/{{ scraper_job_id }}.json"
     use_proxy: false
     timeout: 5
     return_content: true
