@@ -16,6 +16,10 @@ FROM node:22-bookworm AS browser
 ARG PLAYWRIGHT_VERSION=1.63.0
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 
+# Some host VPN routes block plain HTTP to Debian's CDN.
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' \
+    /etc/apt/sources.list.d/debian.sources
+
 RUN --mount=type=cache,target=/root/.npm \
     npx --yes playwright@${PLAYWRIGHT_VERSION} \
     install --with-deps chromium
