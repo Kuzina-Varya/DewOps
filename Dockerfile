@@ -22,7 +22,15 @@ RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' \
 
 RUN --mount=type=cache,target=/root/.npm \
     npx --yes playwright@${PLAYWRIGHT_VERSION} \
-    install --with-deps chromium
+    install-deps chromium
+
+# Preserve completed browser downloads when a later CDN download is interrupted.
+RUN --mount=type=cache,target=/root/.npm \
+    --mount=type=cache,target=/root/.cache/ms-playwright \
+    PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright \
+    npx --yes playwright@${PLAYWRIGHT_VERSION} install chromium \
+    && mkdir -p /opt/playwright \
+    && cp -a /root/.cache/ms-playwright/. /opt/playwright/
 
 RUN rm -rf /root/.npm
 
