@@ -85,6 +85,8 @@ def key_material():
 
 
 def refresh_inventory(instance):
+    if not KNOWN.exists() or not KEY.exists():
+        raise RuntimeError("Pinned SSH identity is missing; run make provision first")
     addresses = [ip for ip in instance.get("ipv4", []) if not ipaddress.ip_address(ip).is_loopback]
     if not addresses:
         raise RuntimeError("VM has no IPv4 address reachable from the control node")
@@ -233,6 +235,11 @@ def main():
         raise RuntimeError("Invalid VM_NAME")
     os.chdir(ROOT)
     command = sys.argv[1]
+    if command in ("deploy", "run", "verify", "fault-test"):
+        instance = current_instance()
+        if not instance or instance["state"] != "Running":
+            raise RuntimeError("The lab VM is not running; run make provision first")
+        refresh_inventory(instance)
     if command == "setup":
         setup()
     elif command == "provision":
