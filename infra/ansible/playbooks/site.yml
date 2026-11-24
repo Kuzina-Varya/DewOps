@@ -1,0 +1,13 @@
+---
+- name: Bootstrap permanent access
+  ansible.builtin.import_playbook: bootstrap.yml
+
+- name: Configure the Ubuntu server using permanent access
+  hosts: scraper_hosts
+  become: true
+  vars:
+    ansible_user: admin
+  roles:
+    - ssh_hardening
+    - docker_engine
+    - scraper

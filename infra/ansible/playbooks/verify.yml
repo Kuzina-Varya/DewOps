@@ -1,0 +1,52 @@
+---
+- name: Verify server policy and the last submitted job
+  hosts: scraper_hosts
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: admin
+  vars_files: [../vars/main.yml]
+  tasks:
+    - name: Validate the full SSH configuration
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+
+    - name: Read effective SSH policy
+      ansible.builtin.command: /usr/sbin/sshd -T
+      changed_when: false
+      register: scraper_ssh_policy
+
+    - name: Check hardened authentication policy
+      ansible.builtin.assert:
+        that:
+          - "'permitrootlogin no' in scraper_ssh_policy.stdout_lines"
+          - "'passwordauthentication no' in scraper_ssh_policy.stdout_lines"
+          - "'kbdinteractiveauthentication no' in scraper_ssh_policy.stdout_lines"
+          - "'allowusers admin' in scraper_ssh_policy.stdout_lines"
+
+    - name: Read permanent administrator groups
+      ansible.builtin.command: id -nG admin
+      changed_when: false
+      register: scraper_admin_groups
+
+    - name: Check admin does not have direct Docker socket access
+      ansible.builtin.assert:
+        that:
+          - "'docker' not in scraper_admin_groups.stdout.split()"
+
+    - name: Read the resolved Compose configuration
+      ansible.builtin.command:
+        argv: "{{ scraper_compose_command + ['config', '--format', 'json'] }}"
+      changed_when: false
+      register: scraper_compose_config
+
+    - name: Check that Redis is private and Nginx storage is read only
+      ansible.builtin.assert:
+        that:
+          - not (scraper_compose_config.stdout | from_json).services.redis.get('ports', [])
+          - >-
+            ((scraper_compose_config.stdout | from_json).services.nginx.volumes
+            | selectattr('target', 'equalto', '/usr/share/nginx/html/results') | first).read_only
+
+    - name: Verify the concrete job result
+      ansible.builtin.include_tasks: tasks/verify-result.yml

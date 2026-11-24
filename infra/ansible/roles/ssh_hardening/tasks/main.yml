@@ -1,0 +1,38 @@
+---
+- name: Install SSH access policy before distribution snippets
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/00-quotes-scraper.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      ChallengeResponseAuthentication no
+      PubkeyAuthentication yes
+      AuthenticationMethods publickey
+      AllowUsers admin
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Validate and reload SSH
+
+- name: Disable the temporary bootstrap account
+  ansible.builtin.user:
+    name: ubuntu
+    shell: /usr/sbin/nologin
+    password_lock: true
+
+- name: Remove bootstrap authorized keys
+  ansible.builtin.file:
+    path: /home/ubuntu/.ssh/authorized_keys
+    state: absent
+
+- name: Remove bootstrap passwordless sudo
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/90-cloud-init-users
+    regexp: '^ubuntu\s'
+    state: absent
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Apply and validate SSH changes before continuing
+  ansible.builtin.meta: flush_handlers

@@ -7,6 +7,7 @@ export async function scrapeQuotes(url) {
     args: ["--no-sandbox"]
   });
 
+  const deadline = setTimeout(() => { browser.close().catch(() => {}); }, 90000);
   try {
     const page = await browser.newPage();
 
@@ -49,6 +50,7 @@ export async function scrapeQuotes(url) {
 
     return quotes;
   } finally {
+    clearTimeout(deadline);
     await browser.close();
   }
 }

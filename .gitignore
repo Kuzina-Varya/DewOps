@@ -18,3 +18,8 @@ crash.log
 .env.*
 *.[zZ][iI][pP]
 .codex-pets/
+
+# Local lab 3 control node, SSH keys and generated inventory
+.lab/
+infra/ansible/inventories/lab/
+__pycache__/
