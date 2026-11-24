@@ -18,9 +18,17 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
 
 # Some host VPN routes block plain HTTP to Debian's CDN.
 RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' \
-    /etc/apt/sources.list.d/debian.sources
+    /etc/apt/sources.list.d/debian.sources \
+    && rm -f /etc/apt/apt.conf.d/docker-clean \
+    && printf '%s\n' 'Acquire::Retries "3";' \
+       'Acquire::https::Timeout "20";' 'Acquire::http::Timeout "20";' \
+       'APT::Update::Error-Mode "any";' \
+       'Binary::apt::APT::Keep-Downloaded-Packages "true";' \
+       > /etc/apt/apt.conf.d/80-build-downloads
 
 RUN --mount=type=cache,target=/root/.npm \
+    --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     npx --yes playwright@${PLAYWRIGHT_VERSION} \
     install-deps chromium
 

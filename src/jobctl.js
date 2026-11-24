@@ -4,8 +4,22 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { validateJob, validateQuotes } from "./results.js";
 
-const redis = createClient({ url: process.env.REDIS_URL });
+const redis = createClient({
+  url: process.env.REDIS_URL,
+  socket: { connectTimeout: 3000, reconnectStrategy: false },
+  disableOfflineQueue: true
+});
 redis.on("error", error => console.error(error.message));
+const timeout = Number(process.env.JOBCTL_TIMEOUT_MS || 10000);
+if (!Number.isInteger(timeout) || timeout < 100 || timeout > 60000) {
+  throw new Error("JOBCTL_TIMEOUT_MS must be an integer between 100 and 60000");
+}
+// Also bounds a connected Redis server that never answers, and shutdown itself.
+const deadline = setTimeout(() => {
+  console.error(`Job command timed out after ${timeout} ms`);
+  if (redis.isOpen) redis.destroy();
+  process.exit(1);
+}, timeout);
 const [command, job_id, url] = process.argv.slice(2);
 async function fingerprint() {
   validateJob({ job_id, url: "https://example.org" });
@@ -58,4 +72,7 @@ async function main() {
 }
 try { console.log(JSON.stringify(await main())); }
 catch (error) { console.error(error.message); process.exitCode = 1; }
-finally { if (redis.isOpen) await redis.quit(); }
+finally {
+  if (redis.isOpen) await redis.quit();
+  clearTimeout(deadline);
+}

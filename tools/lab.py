@@ -5,11 +5,13 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import shlex
 import shutil
 import socket
 import subprocess
 import sys
+import threading
 import time
 import uuid
 
@@ -38,6 +40,16 @@ def mp():
 
 def instances():
     return json.loads(execute([*mp(), "list", "--format", "json"], capture_output=True, timeout=60).stdout)["list"]
+
+
+def check_node():
+    message = "Install Node.js 22+ and npm inside the POSIX control node (Ubuntu in WSL), not Windows npm"
+    if not shutil.which("node") or not shutil.which("npm"):
+        raise RuntimeError(message)
+    details = json.loads(execute(["node", "-p", "JSON.stringify({platform:process.platform,major:Number(process.versions.node.split('.')[0])})"],
+                                 capture_output=True, timeout=10).stdout)
+    if details["platform"] == "win32" or details["major"] < 22:
+        raise RuntimeError(message)
 
 
 def current_instance():
@@ -174,11 +186,37 @@ def play(name, extra=None):
     try:
         with log_path.open("w") as log:
             process = subprocess.Popen([str(arg) for arg in args], env=ansible_env(), text=True,
-                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=ROOT)
-            for line in process.stdout:
-                print(line, end="", flush=True)
-                log.write(line)
-            code = process.wait()
+                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd=ROOT,
+                                       start_new_session=True)
+            expired = threading.Event()
+
+            def stop_at_deadline():
+                expired.set()
+                # Include SSH child processes; otherwise an inherited pipe can stay open.
+                for sig in (signal.SIGTERM, signal.SIGKILL):
+                    try:
+                        os.killpg(process.pid, sig)
+                    except ProcessLookupError:
+                        return
+                    if sig == signal.SIGTERM:
+                        time.sleep(5)
+
+            seconds = {"verify": 240, "fault-test": 600}.get(name)
+            watchdog = threading.Timer(seconds, stop_at_deadline) if seconds else None
+            if watchdog:
+                watchdog.daemon = True
+                watchdog.start()
+            try:
+                for line in process.stdout:
+                    print(line, end="", flush=True)
+                    log.write(line)
+                    log.flush()
+                code = process.wait()
+            finally:
+                if watchdog:
+                    watchdog.cancel()
+            if expired.is_set():
+                raise RuntimeError(f"Ansible {name} exceeded {seconds}s; see {log_path}")
     finally:
         if tunnel:
             tunnel.terminate()
@@ -242,6 +280,8 @@ def main():
         refresh_inventory(instance)
     if command == "setup":
         setup()
+    elif command == "check-node":
+        check_node()
     elif command == "provision":
         provision()
     elif command == "deploy":

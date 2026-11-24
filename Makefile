@@ -10,7 +10,7 @@ export ANSIBLE_HOST_KEY_CHECKING := True
 VENV := .lab/venv/bin
 EXAMPLE := infra/ansible/inventories/hosts.example.yml
 
-.PHONY: setup provision deploy run verify fault-test destroy ci install test lint syntax compose-check idempotence ci-vm-host ci-vm recreate-test
+.PHONY: setup provision deploy run verify fault-test destroy ci install test check-node lint syntax compose-check idempotence ci-vm-host ci-vm recreate-test
 
 setup:
 	$(PYTHON) tools/lab.py setup
@@ -33,10 +33,13 @@ fault-test:
 destroy:
 	$(PYTHON) tools/lab.py destroy
 
-install:
+check-node:
+	$(PYTHON) tools/lab.py check-node
+
+install: check-node
 	npm ci
 
-test:
+test: check-node
 	npm test
 
 lint: setup

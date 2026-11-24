@@ -102,10 +102,17 @@ cloud-init, закрепляет host key и генерирует inventory. З�
 `make verify` проверяет именно этот результат, а не любой JSON в каталоге:
 валидный непустой массив, отсутствие временного файла, совпадение файла с HTTP,
 пустой XPENDING и отсутствие ещё не доставленных заданий (group lag=0).
-Есть 60 попыток с паузами 2 секунды; HTTP-запросы имеют timeout. Запускайте эти
+Есть 60 попыток с паузами 2 секунды. Одна команда jobctl ограничена 10 секундами,
+одна попытка Compose — 20 секундами с принудительной остановкой ещё через 5 секунд.
+Весь playbook `verify` ограничен 240 секундами (до 5 секунд на завершение процессов),
+`fault-test` — 600 секундами. HTTP-запросы также имеют timeout. Запускайте эти
 сценарии последовательно: проверка предполагает очередь без посторонних заданий.
 `verify` также проверяет sshd policy, отсутствие `admin` в docker group,
 неопубликованный Redis и read-only mount Nginx.
+
+При сборке APT повторяет сетевые запросы и сохраняет скачанные пакеты в BuildKit
+cache. Ошибка обновления индексов останавливает сборку с исходной сетевой ошибкой.
+Недоступность внешних репозиториев всё равно требует восстановления доступа к ним.
 
 После `make destroy` удаляются **только эта VM** и локальные `.lab/` и generated
 inventory. Команда не использует глобальный `multipass purge` и не трогает другие VM.
@@ -149,6 +156,7 @@ VM без соответствующего локального ownership marker
 | `ci` | YAML, ansible-lint, syntax-check с example inventory, Compose config, unit tests |
 | `install` | npm ci на control node для unit tests |
 | `test` | Node.js unit tests после install |
+| `check-node` | Проверка Node.js 22+ на POSIX control node перед npm |
 | `lint` | setup, yamllint и ansible-lint |
 | `syntax` | setup, syntax-check всех playbook-ов, компиляция Python |
 | `compose-check` | docker compose config без запуска контейнеров |

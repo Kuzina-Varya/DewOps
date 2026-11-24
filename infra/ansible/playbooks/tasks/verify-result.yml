@@ -2,7 +2,7 @@
 - name: Wait for valid disk JSON, identical Nginx JSON, no temporary file and an empty PEL
   ansible.builtin.command:
     argv: >-
-      {{ scraper_compose_command + ['run', '--rm', '--no-deps', 'scraper',
+      {{ ['timeout', '--signal=TERM', '--kill-after=5s', '20s'] + scraper_compose_command + ['run', '--rm', '--no-deps', 'scraper',
       'node', 'src/jobctl.js', 'verify', scraper_job_id] }}
   register: scraper_verified
   changed_when: false
